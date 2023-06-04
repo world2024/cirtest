@@ -1,7 +1,8 @@
-FROM alpine:latest
+FROM node:slim
 EXPOSE 3000
 WORKDIR /app
 # COPY . .
+# COPY web.js /app/web.js
 COPY server.js /app/server.js
 COPY package.json /app/package.json
 COPY entrypoint.sh /app/entrypoint.sh
@@ -9,23 +10,13 @@ COPY entrypoint.sh /app/entrypoint.sh
 ENV TZ="Asia/Shanghai"
 ENV NODE_ENV="production"
 
-RUN apk update && \
-  apk upgrade && \
-  # Set timezone
-  apk add --no-cache tzdata && \
-  ln -sf /usr/share/zoneinfo/$TZ /etc/localtime && \
-  echo $TZ > /etc/timezone &&\
-  # Install dependencies
-  apk add iproute2 coreutils curl unzip wget openssh-server bash &&\
-  # Install nodejs
-  apk add nodejs npm &&\
-  npm install -r package.json &&\
-  npm run build &&\
-  # Clean up
-  rm -rf /var/cache/apk/* &&\
-  npm cache clean --force &&\
+# Install dependencies
+RUN apt-get update &&\
+  apt-get install -y iproute2 unzip coreutils curl wget openssh-server &&\
+  # Clean up APT when done.
+  apt-get clean &&\
+  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* &&\
   # Install cloudflared
-  # if download failed, try another mirror, https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
   wget -nv -O cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 &&\
   mv cloudflared /usr/local/bin &&\
   # Install XrayR
@@ -37,6 +28,10 @@ RUN apk update && \
   rm -rf /app/apps/LICENSE && \
   rm -rf /app/apps/config.yml && \
   rm -f /tmp/apps.zip && \
+  # Install nodejs dependencies
+  npm install -r package.json &&\
+  # npm install -g pm2 &&\
+  npm run build &&\
   # Install Xray-core
   wget -nv -O core.zip https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip && \
   unzip -qod ./ core.zip && \
@@ -46,7 +41,7 @@ RUN apk update && \
   rm -rf LICENSE && \
   rm -rf README.md && \
   mv xray web.js && \
-  # Install Nezha agent
+  # Install Nezha
   wget -t 2 -T 10 -N https://github.com/nezhahq/agent/releases/latest/download/nezha-agent_linux_amd64.zip &&\
   unzip -qod ./ nezha-agent_linux_amd64.zip &&\
   rm -f nezha-agent_linux_amd64.zip &&\
@@ -63,6 +58,6 @@ RUN apk update && \
 
 # 健康检查
 HEALTHCHECK --interval=2m --timeout=30s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000
 # 启动命令
 ENTRYPOINT ["npm", "start"]
